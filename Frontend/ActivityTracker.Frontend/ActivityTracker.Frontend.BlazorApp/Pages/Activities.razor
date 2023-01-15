@@ -1,0 +1,111 @@
+﻿@page "/activities"
+
+@using ActivityTracker.Frontend.BlazorApp.Components
+@using ActivityTracker.Frontend.BlazorApp.Helper
+@using ActivityTracker.Frontend.BlazorApp.Models
+@using BlazorPagination
+@using Newtonsoft.Json
+@using System.Text
+
+@inject HttpClient Http
+
+<PageTitle>Activities overview</PageTitle>
+
+<h1>Activities overview</h1>
+
+<p>This component demonstrates fetching data from the server.</p>
+
+@if (ActivityItems == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Description</th>
+                <th>Duration</th>
+                <th>Start</th>
+                <th>End</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var activity in ActivityItems)
+            {
+                <tr>
+                    <td>@activity.Id</td>
+                    <td>@activity.Description</td>
+                    <td>@string.Format("{0} days, {1:D2} hours, {2:D2} minutes, {3:D2} seconds", activity.Duration.Value.Days, activity.Duration.Value.Hours, activity.Duration.Value.Minutes, activity.Duration.Value.Seconds)</td>
+                    <td>@activity.StartTime.ToLocalTime()</td>
+                    <td>
+                        @if (activity.EndTime == null)
+                        {
+                            <button class="btn btn-primary" @onclick="() => StopActivityAsync(activity)">Stop now!</button>
+                        }
+                        else
+                        {
+                            @activity.EndTime?.ToLocalTime()
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <PaginationComponent PageData="PageData" Spread="2" SelectedPage="SelectedPage" />
+
+}
+
+@code {
+
+    public List<ActivityModel>? ActivityItems;
+    public PagedDataModel PageData;
+
+    private int _pageNumber = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await FetchDataAsync();
+    }
+
+    private async Task SelectedPage(int page)
+    {
+        _pageNumber = page;
+        await FetchDataAsync();
+    }
+
+    private async Task FetchDataAsync()
+    {
+        ActivityItems = null;
+
+        var endpoint = BackendEndpointHelper.PagedAcitvitiesGETEndpoint(_pageNumber, 20);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+        var response = await Http.GetAsync(endpoint);
+
+        var content = response.Content.ReadFromJsonAsync<List<ActivityModel>>();
+        string paginationData = response.Headers.GetValues("X-Pagination").First();
+
+        PageData = JsonConvert.DeserializeObject<PagedDataModel>(paginationData);
+        ActivityItems = await content;
+    }
+
+    private async Task StopActivityAsync(ActivityModel model)
+    {
+        var endpoint = BackendEndpointHelper.EndingActivityPOSTEndpoint();
+
+        var stopAcitvity = new EndActivityModel
+            {
+                Id = model.Id,
+                Time = DateTime.Now
+            };
+
+        var content = new StringContent(JsonConvert.SerializeObject(stopAcitvity), Encoding.UTF8, "application/json");
+
+        await Http.PostAsync(endpoint, content);
+        await FetchDataAsync();
+
+    }
+}

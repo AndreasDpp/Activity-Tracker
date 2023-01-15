@@ -1,0 +1,107 @@
+﻿@page "/activity/new"
+@using ActivityTracker.Frontend.BlazorApp.Models
+@using ActivityTracker.Frontend.BlazorApp.Helper
+@using Newtonsoft.Json
+@using System.Text
+
+@inject HttpClient _http
+
+<PageTitle>New activity</PageTitle>
+
+<h1>New activity</h1>
+<hr />
+
+@if (ActivityModel != null)
+{
+    <strong>Id:</strong> <p>  @ActivityModel.Id</p>
+    <strong>Start:</strong> <p> @ActivityModel.StartTime.ToLocalTime()</p>
+
+    <strong>End:</strong>
+    @if (ActivityModel.EndTime == null)
+    {
+        <p style="color:green">Activity is running!</p>
+        <button class="btn btn-primary" @onclick="StopActivityAsync">Stop now!</button>
+
+    }
+    else
+    {
+        <p style="color:red">Is stopped at @ActivityModel.EndTime?.ToLocalTime()</p>
+        <strong>Duration:</strong>
+        <p>
+            @string.Format("{0} days, {1:D2} hours, {2:D2} minutes, {3:D2} seconds", ActivityModel.Duration.Value.Days,
+                ActivityModel.Duration.Value.Hours,
+                ActivityModel.Duration.Value.Minutes,
+                ActivityModel.Duration.Value.Seconds)
+        </p>
+
+    }
+}
+else
+{
+    <EditForm Model="@NewActivityModel" OnValidSubmit="@HandleValidSubmitAsync">
+        <DataAnnotationsValidator />
+
+        <div class="form-group row">
+            <label for="firstName" class="col-sm-2 col-form-label">
+                Description
+            </label>
+            <div class="col-sm-10">
+                <InputText id="description" class="form-control" placeholder="Description for the activity" @bind-Value="NewActivityModel.Description" />
+            </div>
+
+            <ValidationMessage For="@(() => NewActivityModel.Description)" />
+
+        </div>
+        <br />
+        <div class="form-group row">
+            <div>
+
+                <button type="submit" class="btn btn-primary">Submit</button>
+            </div>
+
+        </div>
+
+    </EditForm>
+
+}
+
+
+
+@code {
+    public ActivityModel ActivityModel;
+    public string StopTime;
+
+    public StartActivityModel NewActivityModel = new();
+
+    private async Task HandleValidSubmitAsync(EditContext editContext)
+    {
+        NewActivityModel.Time = DateTime.Now;
+
+        var endpoint = BackendEndpointHelper.StartingActivityPOSTEndpoint();
+
+        var json = JsonConvert.SerializeObject(NewActivityModel);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        var result = await _http.PostAsync(endpoint, content);
+
+        ActivityModel = await result.Content.ReadFromJsonAsync<ActivityModel>();
+    }
+
+    private async Task StopActivityAsync()
+    {
+        var endpoint = BackendEndpointHelper.EndingActivityPOSTEndpoint();
+
+        var stopAcitvity = new EndActivityModel
+            {
+                Id = ActivityModel.Id,
+                Time = DateTime.Now
+            };
+
+        var json = JsonConvert.SerializeObject(stopAcitvity);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        var result = await _http.PostAsync(endpoint, content);
+
+        ActivityModel = await result.Content.ReadFromJsonAsync<ActivityModel>();
+    }
+}
